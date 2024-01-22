@@ -1,0 +1,206 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Data.SqlClient;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace Employees
+{
+    public partial class Form1 : Form
+    {
+        public Form1()
+        {
+            InitializeComponent();
+            LoadDataGridView();
+        }
+
+        private SqlConnection CreateConnection()
+        {
+            string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            string relativePathToDatabase = Path.Combine(appDirectory, "DB1.mdf");
+            string connectionString = $"Data Source=(LocalDB)\\MSSQLLocalDB;AttachDbFilename=" +
+                $"{relativePathToDatabase};Integrated Security=True";
+            SqlConnection connection = new SqlConnection(connectionString);
+            return connection;
+        }
+        private void LoadDataGridView() 
+        {
+            SqlConnection connection = CreateConnection();
+            SqlDataAdapter adapter;
+            DataTable dataTable = new DataTable();
+            try
+            {
+                connection.Open();
+                string query = "select * from employee";
+                adapter = new SqlDataAdapter(query, connection);
+                adapter.Fill(dataTable);
+                DGV.DataSource = dataTable;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+
+        private void AddEmployee(string fn, string ln, DateTime hd, string dpm, int slr) {
+            SqlConnection connection = CreateConnection();
+            try
+            {
+                connection.Open();
+                string query = "insert into employee (FirstName,LastName,HireDate,Department,Salary)" +
+                    "values (@FN,@LN,@HD,@DPM,@SLR)";
+                using (SqlCommand cmd = new SqlCommand(query, connection))
+                {
+                    cmd.Parameters.AddWithValue("@FN",fn);
+                    cmd.Parameters.AddWithValue("@LN",ln);
+                    cmd.Parameters.AddWithValue("@HD",hd);
+                    cmd.Parameters.AddWithValue("@DPM",dpm);
+                    cmd.Parameters.AddWithValue("@SLR",slr);
+                    cmd.ExecuteNonQuery();
+                    
+                    MessageBox.Show("Employee add success");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+            finally 
+            {
+                connection.Close();
+            }
+        
+        }
+
+        private void bt_create_Click(object sender, EventArgs e)
+        {
+            string fn = textBox1.Text;
+            string ln = textBox2.Text;
+            DateTime hd = dtp.Value;
+            string dpm = textBox3.Text;
+            if (int.TryParse(textBox4.Text, out int slr))
+            {
+
+                AddEmployee(fn, ln, hd, dpm, slr);
+                LoadDataGridView();
+            }
+            else
+            {
+                MessageBox.Show("Salary ต้องเป็นจัวเลข");
+            }
+
+
+        }
+        private DataRow SelectedEmployeesRow = null;
+        private void DGV_SelectionChanged(object sender, EventArgs e)
+        {
+            if (DGV.SelectedRows.Count > 0) {
+                DataGridViewRow selectedRow = DGV.SelectedRows[0];
+                SelectedEmployeesRow = ((DataRowView)selectedRow.DataBoundItem).Row;
+                textBox1.Text = SelectedEmployeesRow["FirstName"].ToString();
+                textBox2.Text = SelectedEmployeesRow["LastName"].ToString();
+                dtp.Value = (DateTime)SelectedEmployeesRow["HireDate"];
+                textBox3.Text = SelectedEmployeesRow["Department"].ToString();
+                textBox4.Text = SelectedEmployeesRow["Salary"].ToString();
+
+
+            }
+        }
+        private void bt_update_Click(object sender, EventArgs e)
+        {
+            if (SelectedEmployeesRow != null)
+            {
+                string upfn = textBox1.Text;
+                string upln = textBox2.Text;
+                DateTime updtp = dtp.Value;
+                string updpm = textBox3.Text;
+                int upslr;
+                if (int.TryParse(textBox4.Text, out upslr))
+                {
+                    UpEmData(SelectedEmployeesRow, upfn, upln, updtp, updpm, upslr);
+                    LoadDataGridView();
+                }
+                else
+                {
+                    MessageBox.Show("Salary ต้องเป็นจัวเลข");
+                }
+            }
+        }
+        private void UpEmData(DataRow employeesRow, string fn, string ln, DateTime hd, string dpm, int slr) {
+            SqlConnection connection = CreateConnection();
+            try 
+            {
+                connection.Open();
+                string query = "update employee set FirstName = @FN,LastName=@LN,HireDate=@HD," +
+                    " Department = @DPM, Salary = @SLR where EmployeeID = @EMID";
+                using (SqlCommand cmd = new SqlCommand(query, connection)) {
+                    cmd.Parameters.AddWithValue("@FN",fn);
+                    cmd.Parameters.AddWithValue("@LN",ln);
+                    cmd.Parameters.AddWithValue("@HD",hd); 
+                    cmd.Parameters.AddWithValue("@DPM",dpm); 
+                    cmd.Parameters.AddWithValue("@SLR",slr);
+                    cmd.Parameters.AddWithValue("@EMID",employeesRow["EmployeeID"]);
+                    cmd.ExecuteNonQuery();
+                    MessageBox.Show("Employee add success");
+                }
+            }
+            catch(Exception ex) {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+            finally 
+            {
+                connection.Close();
+            }
+        }
+
+        private void bt_delete_Click(object sender, EventArgs e)
+        {
+            int selectedEmID = int.Parse(SelectedEmployeesRow["EmployeeID"].ToString());
+            if (selectedEmID != -1)
+            { 
+                DialogResult result = MessageBox.Show("Are you sure you want to delete this employee?",
+                    "Confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.Yes)
+                {
+                    DeleteEmployee(selectedEmID);
+                    LoadDataGridView();
+                }
+            }
+        }
+
+        private void DeleteEmployee(int employeeID)
+        {
+            SqlConnection connection = CreateConnection();
+            try
+            {
+                connection.Open();
+                string query = "DELETE FROM employee WHERE EmployeeID = @EMID";
+                using (SqlCommand cmd = new SqlCommand(query, connection))
+                {
+                    cmd.Parameters.AddWithValue("@EMID", employeeID);
+                    cmd.ExecuteNonQuery();
+                    MessageBox.Show("Student deleted successfully.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+    }
+}
